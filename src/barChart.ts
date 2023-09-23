@@ -9,6 +9,8 @@ import {
 } from "d3-scale";
 
 import { axisBottom } from "d3-axis";
+import { axisLeft } from "d3-axis";
+import { format } from "d3-format"; // Import the d3-format module
 
 import powerbiVisualsApi from "powerbi-visuals-api";
 import "regenerator-runtime/runtime";
@@ -42,6 +44,8 @@ import { textMeasurementService } from "powerbi-visuals-utils-formattingutils";
 import { getValue, getCategoricalObjectValue } from "./objectEnumerationUtility";
 import { getLocalizedString } from "./localization/localizationHelper"
 import { dataViewWildcard } from "powerbi-visuals-utils-dataviewutils";
+
+const customFormat = format(".3s"); // ".2s" format rounds to two significant digits
 
 /**
  * Interface for BarCharts viewmodel.
@@ -85,7 +89,6 @@ interface BarChartDataPoint {
  */
 interface BarChartSettings {
     enableAxis: {
-        show: boolean;
         fill: string;
     };
 
@@ -105,7 +108,6 @@ interface BarChartSettings {
 
 let defaultSettings: BarChartSettings = {
     enableAxis: {
-        show: false,
         fill: "#000000",
     },
     generalView: {
@@ -162,8 +164,7 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): BarCh
 
     let barChartSettings: BarChartSettings = {
         enableAxis: {
-            show: getValue<boolean>(objects, 'enableAxis', 'show', defaultSettings.enableAxis.show),
-            fill: getAxisTextFillColor(objects, colorPalette, defaultSettings.enableAxis.fill),
+            fill: getAxisTextFillColor(objects, colorPalette, defaultSettings.enableAxis.fill)
         },
         generalView: {
             opacity: getValue<number>(objects, 'generalView', 'opacity', defaultSettings.generalView.opacity),
@@ -269,6 +270,9 @@ export class BarChart implements IVisual {
     private selectionManager: ISelectionManager;
     private barContainer: Selection<SVGElement>;
     private xAxis: Selection<SVGElement>;
+    private xAxisLabel: Selection<SVGElement>;
+    private yAxis: Selection<SVGElement>;
+    private yAxisLabel: Selection<SVGElement>;
     private barDataPoints: BarChartDataPoint[];
     private barChartSettings: BarChartSettings;
     private tooltipServiceWrapper: ITooltipServiceWrapper;
@@ -327,6 +331,18 @@ export class BarChart implements IVisual {
             .append('g')
             .classed('xAxis', true);
 
+        this.xAxisLabel = this.svg
+            .append('text')
+            .classed('xAxisLabel', true);
+
+        this.yAxis = this.svg
+            .append('g')
+            .classed('yAxis', true);
+
+        this.yAxisLabel = this.svg
+            .append('text')
+            .classed('yAxisLabel', true);
+
         this.initAverageLine();
 
         const helpLinkElement: Element = this.createHelpLinkElement();
@@ -358,10 +374,16 @@ export class BarChart implements IVisual {
             .attr("width", width)
             .attr("height", height);
 
-        if (settings.enableAxis.show) {
-            let margins = BarChart.Config.margins;
-            height -= margins.bottom;
-        }
+        let xAxisLabelTextSize = 6
+        this.xAxisLabel
+            .attr("text-anchor", "end")
+            .attr("x", width / 2)
+            .attr("y", height - xAxisLabelTextSize)
+            .text("Test X Axis Label");
+        height -= xAxisLabelTextSize * 5;
+
+        let margins = BarChart.Config.margins;
+        height -= margins.bottom;
 
         this.helpLinkElement
             .classed("hidden", !settings.generalView.showHelpLink)
@@ -378,12 +400,13 @@ export class BarChart implements IVisual {
 
         let xScale = scaleBand()
             .domain(viewModel.dataPoints.map(d => d.category))
-            .rangeRound([0, width])
+            .rangeRound([width / 20, width])  // here we set the position
             .padding(0.2);
 
         let xAxis = axisBottom(xScale);
         const colorObjects = options.dataViews[0] ? options.dataViews[0].metadata.objects : null;
-        this.xAxis.attr('transform', 'translate(0, ' + height + ')')
+        this.xAxis
+            .attr('transform', 'translate(0, ' + height + ')')
             .call(xAxis)
             .attr("color", getAxisTextFillColor(
                 colorObjects,
@@ -394,6 +417,27 @@ export class BarChart implements IVisual {
         const textNodes = this.xAxis.selectAll("text")
         BarChart.wordBreak(textNodes, xScale.bandwidth(), height);
         this.handleAverageLineUpdate(height, width, yScale);
+        
+        let yAxis = axisLeft(yScale)
+                .tickFormat(function (d) {
+                    return customFormat(d).replace("G", "B");
+                });
+        
+        this.yAxis
+            .attr('transform', 'translate(' + (width / 15) +  ', 0)')
+            .call(yAxis)
+            .attr("color", getAxisTextFillColor(
+                colorObjects,
+                this.host.colorPalette,
+                defaultSettings.enableAxis.fill
+            ))
+        this.yAxisLabel
+            .attr("text-anchor", "middle")
+            .attr("x", 0)
+            .attr("y", height / 2)
+            .attr('transform', `rotate(-90, ${6}, 0})`)
+            .text("Test Y Axis Label")
+        ;
 
         this.barSelection = this.barContainer
             .selectAll('.bar')
@@ -547,7 +591,6 @@ export class BarChart implements IVisual {
                 objectEnumeration.push({
                     objectName: objectName,
                     properties: {
-                        show: this.barChartSettings.enableAxis.show,
                         fill: this.barChartSettings.enableAxis.fill,
                     },
                     selector: null
@@ -708,7 +751,7 @@ export class BarChart implements IVisual {
         let fontSize = Math.min(height, width) * BarChart.Config.xAxisFontMultiplier;
         let chosenColor = this.getColorValue(this.barChartSettings.averageLine.fill);
         // If there's no room to place lable above line, place it below
-        let labelYOffset = fontSize * ((yScale(average) > fontSize * 1.5) ? -0.5 : 1.5);
+        let labelYOffset = fontSize * ((yScale(average) > fontSize * 1.5) ? -0.5 : 1.5) * 2;
 
         this.averageLine
             .style("font-size", fontSize)

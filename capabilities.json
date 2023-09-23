@@ -50,12 +50,6 @@
         "enableAxis": {
             "displayName": "Enable Axis",
             "properties": {
-                "show": {
-                    "displayName": "Enable Axis",
-                    "type": {
-                        "bool": true
-                    }
-                },
                 "fill": {
                     "displayName": "Color",
                     "type": {
